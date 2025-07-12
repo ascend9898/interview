@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mini-Interview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; }
+    #prompt { margin-bottom: 1rem; font-weight: 600; }
+    textarea { width: 100%; height: 120px; padding: .5rem; }
+    button { margin-top: .5rem; padding: .4rem .8rem; }
+  </style>
+
+  <!-- Supabase browser SDK (no build tools required) -->
+<!-- Supabase browser SDK – UMD build attaches `window.supabase` -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!--  Load your prompts BEFORE the main script -->
+  <script src="prompts.js"></script>
+</head>
+<body>
+
+<h2>Mini-Interview</h2>
+<div id="prompt"></div>
+
+<textarea id="answer"
+          spellcheck="false"
+          autocomplete="off"
+          onpaste="return false"></textarea>
+<button id="send">Send</button>
+
+<script>
+/* ------------------------------------------------------------------ */
+/*  1.  Light auth – ask once per session                             */
+/* ------------------------------------------------------------------ */
+const meta = {};
+meta.name  = prompt("Your name?");
+meta.email = prompt("Your email?");
+
+/* ------------------------------------------------------------------ */
+/*  2.  Supabase – paste your own credentials here once               */
+/* ------------------------------------------------------------------ */
+const supabase = supabase.createClient(
+  "https://yiuknemctptbpaaaotqv.supabase.co",   //  ← URL  (from Supabase > Project Settings)
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpdWtuZW1jdHB0YnBhYWFvdHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMzE4NjYsImV4cCI6MjA2NzkwNzg2Nn0.cX9115JCnsfiRi39S2MpxacKDpgChz3Gq9x59GHPz9Y"                     //  ← anon public key
+);
+
+/*  (Table DDL for reference – run once in Supabase SQL editor)
+    create table interview_answers (
+      id bigint generated always as identity primary key,
+      name text, email text,
+      prompt text, answer text,
+      keystrokes jsonb,
+      inserted_at timestamp default now()
+    );
+*/
+
+/* ------------------------------------------------------------------ */
+/*  3.  Interview flow                                                */
+/* ------------------------------------------------------------------ */
+let i = 0;                                   // current prompt index
+const promptEl = document.getElementById("prompt");
+const answerTA = document.getElementById("answer");
+const sendBtn  = document.getElementById("send");
+let ks = [];                                 // keystroke log for this answer
+
+// Show first prompt
+promptEl.textContent = PROMPTS[i];
+answerTA.focus();
+
+// Capture raw cadence data
+answerTA.onkeydown = (e) => ks.push({ t: Date.now(), k: e.key });
+
+// Handle Send
+sendBtn.onclick = async () => {
+  const text = answerTA.value.trim();
+  if (!text) return alert("Please type something 😊");
+
+  // 3a – store in Supabase
+  await supabase.from("interview_answers").insert({
+    name: meta.name,
+    email: meta.email,
+    prompt: PROMPTS[i],
+    answer: text,
+    keystrokes: ks      // JSON column
+  });
+
+  // 3b – next prompt or finish
+  i++;
+  if (i < PROMPTS.length) {
+    promptEl.textContent = PROMPTS[i];
+    answerTA.value = "";
+    ks = [];
+    answerTA.focus();
+  } else {
+    promptEl.textContent = "✅ Thanks, you’re done!";
+    answerTA.disabled = true;
+    sendBtn.disabled = true;
+  }
+};
+</script>
+</body>
+</html>
